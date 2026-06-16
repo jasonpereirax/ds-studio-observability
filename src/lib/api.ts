@@ -18,6 +18,13 @@ export type ObservabilitySystem = {
   connected: boolean;
   first_seen_at: string;
   last_seen_at?: string;
+  sourceHost?: string | null;
+  sourceOrigin?: string | null;
+  sourceUrl?: string | null;
+  lastPage?: string | null;
+  lastTitle?: string | null;
+  lastJourney?: string | null;
+  lastReferrer?: string | null;
   activePages: number;
   journeys: number;
   pages: ObservabilityPage[];
@@ -25,8 +32,8 @@ export type ObservabilitySystem = {
 };
 
 export async function getSystems(): Promise<ObservabilitySystem[]> {
-  const response = await fetch('/api/systems');
-  if (!response.ok) throw new Error('Failed to load systems');
+  const response = await fetch("/api/systems");
+  if (!response.ok) throw new Error("Failed to load systems");
   const data = await response.json();
   return data.systems || [];
 }

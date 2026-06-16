@@ -1,0 +1,26 @@
+.connection-details{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+.connection-details div{
+  border:1px solid var(--border);
+  background:var(--backgroundAlternative);
+  border-radius:18px;
+  padding:14px;
+  min-width:0;
+}
+.connection-details span{
+  display:block;
+  color:var(--textSecondary);
+  font-size:13px;
+  margin-bottom:6px;
+}
+.connection-details strong{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+@media(max-width:1024px){.connection-details{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.connection-details{grid-template-columns:1fr}}

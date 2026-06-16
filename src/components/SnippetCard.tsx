@@ -2,16 +2,15 @@ export function SnippetCard({ domain = window.location.origin }: { domain?: stri
   const snippet = `<script src="${domain}/ds-connect.js"></script>
 <script>
   DSStudioConnect.init({
-    systemId: "hustlin-goods-store",
-    systemName: "Hustlin Goods Store",
     publicKey: "PUBLIC_KEY",
-    endpoint: "${domain}/api/collect"
+    endpoint: "${domain}/api/collect",
+    debug: true
   });
 </script>`;
 
   async function copy() {
     await navigator.clipboard.writeText(snippet);
-    alert('Snippet copied.');
+    alert("Snippet copied.");
   }
 
   return (
@@ -20,7 +19,7 @@ export function SnippetCard({ domain = window.location.origin }: { domain?: stri
         <div>
           <span className="caption">Setup</span>
           <h2>Install snippet</h2>
-          <p>Adicione este código no header ou footer do site, app ou sistema.</p>
+          <p>Cole este código no header ou footer. O domínio, sistema, URL e página serão detectados automaticamente.</p>
         </div>
         <button className="button secondary" onClick={copy}>Copy</button>
       </div>
