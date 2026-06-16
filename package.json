@@ -1,0 +1,19 @@
+{
+  "name": "ds-studio-observability-module",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "latest"
+  }
+}
