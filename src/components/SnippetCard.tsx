@@ -10,16 +10,16 @@ export function SnippetCard({ domain = window.location.origin }: { domain?: stri
 
   async function copy() {
     await navigator.clipboard.writeText(snippet);
-    alert("Snippet copied.");
+    alert("Snippet copiado.");
   }
 
   return (
-    <article className="panel">
+    <article className="panel snippet-panel">
       <div className="panel-header">
         <div>
-          <span className="caption">Setup</span>
-          <h2>Install snippet</h2>
-          <p>Cole este código no header ou footer. O domínio, sistema, URL e página serão detectados automaticamente.</p>
+          <span className="label accent">Install</span>
+          <h2>Snippet de conexão</h2>
+          <p>Cole no header ou footer. O domínio, a URL e a página serão detectados automaticamente.</p>
         </div>
         <button className="button secondary" onClick={copy}>Copy</button>
       </div>

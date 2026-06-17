@@ -1,14 +1,30 @@
 import type { ObservabilitySystem } from "../lib/api";
 
 export function ConnectionDetails({ system }: { system: ObservabilitySystem | null }) {
-  if (!system) return <div className="empty">Nenhuma origem conectada ainda.</div>;
+  if (!system) {
+    return (
+      <div className="empty-state compact">
+        <strong>Nenhuma origem conectada</strong>
+        <p>Quando o primeiro heartbeat chegar, origem, URL e página aparecerão aqui.</p>
+      </div>
+    );
+  }
+
+  const items = [
+    ["Origem conectada", system.sourceHost || "—"],
+    ["URL base", system.sourceOrigin || "—"],
+    ["Última página", system.lastPage || "—"],
+    ["Último fluxo", system.lastJourney || "—"]
+  ];
 
   return (
     <div className="connection-details">
-      <div><span>Origem conectada</span><strong>{system.sourceHost || "—"}</strong></div>
-      <div><span>URL base</span><strong>{system.sourceOrigin || "—"}</strong></div>
-      <div><span>Última página</span><strong>{system.lastPage || "—"}</strong></div>
-      <div><span>Último fluxo</span><strong>{system.lastJourney || "—"}</strong></div>
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <span>{label}</span>
+          <strong title={value}>{value}</strong>
+        </div>
+      ))}
     </div>
   );
 }
