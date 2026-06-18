@@ -193,6 +193,11 @@ export default function App() {
             </div>
             <FlowMap pages={selectedSystem?.pages || []} />
           </article>
+
+<PageStructureCard system={selectedSystem} />
+<DSReadinessCard system={selectedSystem} />
+<TechnicalContextCard system={selectedSystem} />
+          
         </section>
       </section>
     </main>
