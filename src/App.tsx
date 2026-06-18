@@ -6,6 +6,9 @@ import { SnippetCard } from "./components/SnippetCard";
 import { FlowMap } from "./components/FlowMap";
 import { PagesTable } from "./components/PagesTable";
 import { ConnectionDetails } from "./components/ConnectionDetails";
+import { PageStructureCard } from "./components/PageStructureCard";
+import { DSReadinessCard } from "./components/DSReadinessCard";
+import { TechnicalContextCard } from "./components/TechnicalContextCard";
 
 export default function App() {
   const [systems, setSystems] = useState<ObservabilitySystem[]>([]);
