@@ -6,10 +6,12 @@ import { ProjectList } from "./components/ProjectList";
 import { ProjectDetail } from "./components/ProjectDetail";
 import { SnippetCard } from "./components/SnippetCard";
 
+type ViewMode = "overview" | "project" | "install";
+
 export default function App() {
   const [systems, setSystems] = useState<ObservabilitySystem[]>([]);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"overview" | "project">("overview");
+  const [viewMode, setViewMode] = useState<ViewMode>("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,6 +45,22 @@ export default function App() {
     setViewMode("project");
   }
 
+  const title =
+    viewMode === "overview"
+      ? "Visão geral da utilização do Design System."
+      : viewMode === "install"
+        ? "Instalação do rastreador."
+        : selectedSystem
+          ? selectedSystem.name
+          : "Observabilidade por projeto.";
+
+  const description =
+    viewMode === "overview"
+      ? "Entenda rapidamente quais projetos estão conectados, quantas páginas usam o DS e onde existe oportunidade de instrumentação."
+      : viewMode === "install"
+        ? "Copie o snippet e instale no header ou footer do sistema que você deseja observar."
+        : "Analise origem, páginas, fluxo, estrutura e prontidão para Design System dentro de um projeto específico.";
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -58,13 +76,16 @@ export default function App() {
           <button className={viewMode === "overview" ? "nav-item active" : "nav-item"} onClick={() => setViewMode("overview")}>
             <i /><Layers size={16} /><span>Overview</span>
           </button>
+
           <button className={viewMode === "project" ? "nav-item active" : "nav-item"} onClick={() => setViewMode("project")}>
             <i /><Wifi size={16} /><span>Project trace</span>
           </button>
-          <button className="nav-item">
+
+          <button className="nav-item" onClick={() => setViewMode("project")}>
             <i /><GitBranch size={16} /><span>Flows</span>
           </button>
-          <button className="nav-item">
+
+          <button className={viewMode === "install" ? "nav-item active" : "nav-item"} onClick={() => setViewMode("install")}>
             <i /><Copy size={16} /><span>Install</span>
           </button>
         </nav>
@@ -80,26 +101,23 @@ export default function App() {
         <header className="topbar">
           <div>
             <span className="label accent">
-              {viewMode === "overview" ? "Design System Usage Overview" : "Project Observability"}
+              {viewMode === "overview"
+                ? "Design System Usage Overview"
+                : viewMode === "install"
+                  ? "Tracking setup"
+                  : "Project Observability"}
             </span>
-            <h1>
-              {viewMode === "overview"
-                ? "Visão geral da utilização do Design System."
-                : selectedSystem
-                  ? selectedSystem.name
-                  : "Observabilidade por projeto."}
-            </h1>
-            <p>
-              {viewMode === "overview"
-                ? "Entenda rapidamente quais projetos estão conectados, quantas páginas usam o DS e onde existe oportunidade de instrumentação."
-                : "Analise origem, páginas, fluxo, estrutura e prontidão para Design System dentro de um projeto específico."}
-            </p>
+            <h1>{title}</h1>
+            <p>{description}</p>
           </div>
 
           <div className="topbar-actions">
-            <button className="button secondary" onClick={() => setViewMode(viewMode === "overview" ? "project" : "overview")}>
-              {viewMode === "overview" ? "Ver projeto" : "Voltar ao overview"}
-            </button>
+            {viewMode !== "overview" && (
+              <button className="button secondary" onClick={() => setViewMode("overview")}>
+                Voltar ao overview
+              </button>
+            )}
+
             <button className="button primary" onClick={load} disabled={loading}>
               <RefreshCw size={16} />
               {loading ? "Atualizando" : "Atualizar"}
@@ -114,16 +132,23 @@ export default function App() {
           </div>
         )}
 
-        {viewMode === "overview" ? (
+        {viewMode === "overview" && (
           <GlobalOverview systems={systems} onSelectProject={selectProject} />
-        ) : (
+        )}
+
+        {viewMode === "project" && (
           <section className="project-layout">
             <aside className="project-rail">
               <ProjectList systems={systems} selectedSystemId={selectedSystem?.id || null} onSelectProject={selectProject} />
-              <SnippetCard />
             </aside>
 
             <ProjectDetail system={selectedSystem} />
+          </section>
+        )}
+
+        {viewMode === "install" && (
+          <section className="install-layout">
+            <SnippetCard />
           </section>
         )}
       </section>
