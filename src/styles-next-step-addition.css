@@ -1,0 +1,118 @@
+/* Next-step observability cards */
+
+.structure-panel,
+.readiness-panel,
+.technical-panel{
+  grid-column:auto;
+}
+
+.structure-grid,
+.technical-grid,
+.readiness-list{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+
+.structure-grid div,
+.technical-grid div,
+.readiness-list div{
+  min-width:0;
+  padding:14px;
+  border-radius:var(--radius-inner);
+  background:var(--surface-2);
+  border:1px solid var(--hairline);
+}
+
+.structure-grid span,
+.technical-grid span,
+.readiness-list span{
+  display:block;
+  margin-bottom:8px;
+  color:var(--ink-subtle);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.075em;
+  text-transform:uppercase;
+}
+
+.structure-grid strong,
+.technical-grid strong,
+.readiness-list strong{
+  display:block;
+  font-size:24px;
+  line-height:1;
+  font-weight:800;
+  letter-spacing:-.03em;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.readiness-score{
+  padding:18px;
+  border-radius:var(--radius-inner);
+  border:1px solid var(--hairline);
+  background:var(--surface-2);
+  margin-bottom:12px;
+}
+
+.readiness-score.low{
+  background:var(--err-soft);
+}
+
+.readiness-score.medium{
+  background:#FFF4E5;
+}
+
+.readiness-score.high{
+  background:var(--ok-soft);
+}
+
+.readiness-score span{
+  display:inline-flex;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.075em;
+  text-transform:uppercase;
+  color:var(--ink-muted);
+}
+
+.readiness-score strong{
+  display:block;
+  margin:12px 0 4px;
+  font-size:50px;
+  line-height:1;
+  font-weight:800;
+  letter-spacing:-.035em;
+}
+
+.readiness-score p{
+  margin:0;
+  color:var(--ink-muted);
+  font-size:13px;
+}
+
+.page-doc-title{
+  display:block;
+  margin-top:6px;
+  color:var(--ink-subtle);
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:11px;
+}
+
+@media(max-width:1180px){
+  .structure-grid,
+  .technical-grid,
+  .readiness-list{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media(max-width:720px){
+  .structure-grid,
+  .technical-grid,
+  .readiness-list{
+    grid-template-columns:1fr;
+  }
+}
