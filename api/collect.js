@@ -21,9 +21,55 @@ function int(value) {
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
 }
 
+function createDebtItems(body, pageEventId) {
+  const items = [];
+  const systemId = body.systemId;
+  const path = str(body.path) || "/";
+
+  if ((int(body.dsComponentCount) || 0) === 0) {
+    items.push({
+      system_id: systemId,
+      page_event_id: pageEventId,
+      page_path: path,
+      type: "no_ds_components",
+      severity: "high",
+      title: "No DS components detected",
+      description: "This page is connected, but no data-ds-component markers were found.",
+      value: 0
+    });
+  }
+
+  if ((int(body.untrackedButtonCount) || 0) > 0) {
+    items.push({
+      system_id: systemId,
+      page_event_id: pageEventId,
+      page_path: path,
+      type: "untracked_buttons",
+      severity: "medium",
+      title: "Untracked interactive buttons",
+      description: "Buttons or button-like elements exist without DS instrumentation.",
+      value: int(body.untrackedButtonCount) || 0
+    });
+  }
+
+  if ((int(body.untrackedFormCount) || 0) > 0) {
+    items.push({
+      system_id: systemId,
+      page_event_id: pageEventId,
+      page_path: path,
+      type: "untracked_forms",
+      severity: "high",
+      title: "Untracked forms",
+      description: "Forms exist without DS instrumentation. This may affect critical journeys.",
+      value: int(body.untrackedFormCount) || 0
+    });
+  }
+
+  return items;
+}
+
 export default async function handler(req, res) {
   cors(res);
-
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -51,7 +97,7 @@ export default async function handler(req, res) {
       })
     });
 
-    const event = await supabaseRequest("observability_page_events", {
+    const eventResponse = await supabaseRequest("observability_page_events", {
       method: "POST",
       body: JSON.stringify({
         system_id: systemId,
@@ -101,13 +147,50 @@ export default async function handler(req, res) {
       })
     });
 
+    const event = eventResponse?.[0] || null;
+    const pageEventId = event?.id || null;
+
+    const components = Array.isArray(body.components) ? body.components : [];
+    const usageRows = components
+      .filter((component) => component && component.name)
+      .map((component) => ({
+        system_id: systemId,
+        page_event_id: pageEventId,
+        page_path: str(body.path) || "/",
+        page_url: str(body.url) || "",
+        journey,
+        component_name: str(component.name),
+        component_version: str(component.version),
+        component_variant: str(component.variant),
+        component_token: str(component.token),
+        count: int(component.count) || 1,
+        created_at: body.timestamp || now
+      }));
+
+    if (usageRows.length) {
+      await supabaseRequest("observability_component_usage", {
+        method: "POST",
+        body: JSON.stringify(usageRows)
+      });
+    }
+
+    const debtRows = createDebtItems(body, pageEventId);
+    if (debtRows.length) {
+      await supabaseRequest("observability_design_debt", {
+        method: "POST",
+        body: JSON.stringify(debtRows)
+      });
+    }
+
     return res.status(200).json({
       ok: true,
       connected: true,
       systemId,
       journey,
       title,
-      event: event?.[0] || null
+      components: usageRows.length,
+      debt: debtRows.length,
+      event
     });
   } catch (error) {
     console.error("[collect]", error);

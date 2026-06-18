@@ -1,5 +1,5 @@
 (function () {
-  var VERSION = "0.3.0-page-structure-readiness";
+  var VERSION = "0.4.0-component-usage";
 
   function slugify(value) {
     return String(value || "")
@@ -59,7 +59,38 @@
     };
   }
 
-  function getPageStructure() {
+  function getComponentUsage() {
+    var nodes = Array.from(document.querySelectorAll("[data-ds-component]"));
+    var map = {};
+
+    nodes.forEach(function (el) {
+      var name = el.getAttribute("data-ds-component");
+      if (!name) return;
+
+      var version = el.getAttribute("data-ds-version") || null;
+      var variant = el.getAttribute("data-ds-variant") || null;
+      var token = el.getAttribute("data-ds-token") || null;
+      var key = [name, version || "", variant || "", token || ""].join("|");
+
+      if (!map[key]) {
+        map[key] = {
+          name: name,
+          version: version,
+          variant: variant,
+          token: token,
+          count: 0
+        };
+      }
+
+      map[key].count += 1;
+    });
+
+    return Object.keys(map).map(function (key) {
+      return map[key];
+    });
+  }
+
+  function getPageStructure(components) {
     var dsComponents = document.querySelectorAll("[data-ds-component]");
     var tracked = document.querySelectorAll("[data-ds-component], [data-component], [data-testid]");
     var buttons = Array.from(document.querySelectorAll("button, [role='button'], a.button, .button, .btn"));
@@ -75,9 +106,9 @@
     var trackedComponentCount = tracked.length;
     var dsReadiness = "low";
 
-    if (dsComponentCount >= 10) {
+    if (dsComponentCount >= 10 || components.length >= 6) {
       dsReadiness = "high";
-    } else if (dsComponentCount > 0 || trackedComponentCount >= 5) {
+    } else if (dsComponentCount > 0 || trackedComponentCount >= 5 || components.length > 0) {
       dsReadiness = "medium";
     }
 
@@ -99,17 +130,10 @@
 
   function getPerformanceData() {
     var nav = null;
-
-    try {
-      nav = performance.getEntriesByType("navigation")[0];
-    } catch (error) {}
+    try { nav = performance.getEntriesByType("navigation")[0]; } catch (error) {}
 
     if (!nav) {
-      return {
-        loadTimeMs: null,
-        domReadyTimeMs: null,
-        navigationType: null
-      };
+      return { loadTimeMs: null, domReadyTimeMs: null, navigationType: null };
     }
 
     return {
@@ -124,28 +148,19 @@
     var height = window.innerHeight || document.documentElement.clientHeight || null;
     var deviceType = "desktop";
 
-    if (width && width < 768) {
-      deviceType = "mobile";
-    } else if (width && width < 1100) {
-      deviceType = "tablet";
-    }
+    if (width && width < 768) deviceType = "mobile";
+    else if (width && width < 1100) deviceType = "tablet";
 
-    return {
-      viewportWidth: width,
-      viewportHeight: height,
-      deviceType: deviceType
-    };
+    return { viewportWidth: width, viewportHeight: height, deviceType: deviceType };
   }
 
   function inferJourney(path) {
     var value = String(path || "").toLowerCase();
-
     if (value.includes("checkout") || value.includes("cart") || value.includes("payment") || value.includes("carrinho") || value.includes("finalizar-compra")) return "Checkout";
     if (value.includes("login") || value.includes("account") || value.includes("register") || value.includes("minha-conta") || value.includes("cadastro")) return "Authentication";
     if (value.includes("product") || value.includes("produto")) return "Product Detail";
     if (value.includes("support") || value.includes("help") || value.includes("faq") || value.includes("contato")) return "Support";
     if (value === "/" || value === "") return "Home";
-
     return "General";
   }
 
@@ -153,12 +168,10 @@
     try {
       var key = "ds-studio-session-id";
       var id = sessionStorage.getItem(key);
-
       if (!id) {
         id = "session_" + Math.random().toString(16).slice(2) + "_" + Date.now();
         sessionStorage.setItem(key, id);
       }
-
       return id;
     } catch (error) {
       return "session_unavailable";
@@ -168,8 +181,9 @@
   function send(config) {
     config = config || {};
 
+    var components = getComponentUsage();
     var metadata = getPageMetadata();
-    var structure = getPageStructure();
+    var structure = getPageStructure(components);
     var performanceData = getPerformanceData();
     var device = getDeviceData();
     var hostname = window.location.hostname || "unknown-host";
@@ -219,6 +233,8 @@
       untrackedFormCount: structure.untrackedFormCount,
       dsReadiness: structure.dsReadiness,
 
+      components: components,
+
       viewportWidth: device.viewportWidth,
       viewportHeight: device.viewportHeight,
       deviceType: device.deviceType,
@@ -248,14 +264,10 @@
       status: "connected",
       version: VERSION,
       payload: payload,
-      ping: function () {
-        send(config);
-      }
+      ping: function () { send(config); }
     };
 
-    if (config.debug) {
-      console.log("[DS Studio Connect] heartbeat", payload);
-    }
+    if (config.debug) console.log("[DS Studio Connect] heartbeat", payload);
   }
 
   function init(options) {
@@ -263,9 +275,7 @@
     var delay = typeof config.delay === "number" ? config.delay : 900;
 
     function run() {
-      window.setTimeout(function () {
-        send(config);
-      }, delay);
+      window.setTimeout(function () { send(config); }, delay);
     }
 
     if (document.readyState === "loading") {

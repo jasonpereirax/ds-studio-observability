@@ -1,3 +1,34 @@
+export type ComponentUsage = {
+  name: string;
+  count: number;
+  pages: string[];
+  systems: string[];
+  variants: string[];
+  versions: string[];
+};
+
+export type DesignDebt = {
+  id: string;
+  system_id: string;
+  page_event_id?: string;
+  page_path: string;
+  type: string;
+  severity: "low" | "medium" | "high";
+  title: string;
+  description?: string;
+  value?: number;
+  created_at: string;
+};
+
+export type ComponentRegistryItem = {
+  id: string;
+  name: string;
+  category?: string;
+  status?: string;
+  version?: string;
+  description?: string;
+};
+
 export type ObservabilityPage = {
   id: string;
   system_id: string;
@@ -39,6 +70,8 @@ export type ObservabilityPage = {
   load_time_ms?: number;
   dom_ready_time_ms?: number;
   navigation_type?: string;
+  components?: ComponentUsage[];
+  debt?: DesignDebt[];
 };
 
 export type ObservabilitySystem = {
@@ -68,13 +101,28 @@ export type ObservabilitySystem = {
   totalDsComponents?: number;
   totalTrackedComponents?: number;
   dsReadiness?: "low" | "medium" | "high";
+  componentUsage?: ComponentUsage[];
+  designDebt?: DesignDebt[];
   pages: ObservabilityPage[];
   recentEvents: ObservabilityPage[];
 };
 
-export async function getSystems(): Promise<ObservabilitySystem[]> {
+export type SystemsResponse = {
+  systems: ObservabilitySystem[];
+  registry: ComponentRegistryItem[];
+  globalComponents: ComponentUsage[];
+  designDebt: DesignDebt[];
+};
+
+export async function getSystems(): Promise<SystemsResponse> {
   const response = await fetch("/api/systems");
   if (!response.ok) throw new Error("Failed to load systems");
   const data = await response.json();
-  return data.systems || [];
+
+  return {
+    systems: data.systems || [],
+    registry: data.registry || [],
+    globalComponents: data.globalComponents || [],
+    designDebt: data.designDebt || []
+  };
 }
