@@ -1,61 +1,7 @@
--- DS Studio Observability schema
--- Source of truth for a fresh Supabase project.
+-- DS Studio Observability product evolution
+-- Run this against an existing MVP database created from the old schema.
 
 create extension if not exists pgcrypto;
-
-create table if not exists public.observability_systems (
-  id text primary key,
-  name text not null,
-  public_key text,
-  connected boolean not null default false,
-  first_seen_at timestamptz not null default now(),
-  last_seen_at timestamptz
-);
-
-create table if not exists public.observability_page_events (
-  id uuid primary key default gen_random_uuid(),
-  system_id text not null references public.observability_systems(id) on delete cascade,
-  path text not null,
-  url text not null,
-  title text,
-  journey text,
-  referrer text,
-  session_id text,
-  user_agent text,
-  created_at timestamptz not null default now(),
-  hostname text,
-  origin text,
-  page_title text,
-  document_title text,
-  meta_title text,
-  og_title text,
-  twitter_title text,
-  h1 text,
-  canonical_url text,
-  meta_description text,
-  og_type text,
-  language text,
-  script_version text,
-  environment text default 'production',
-  heading_count integer default 0,
-  button_count integer default 0,
-  link_count integer default 0,
-  form_count integer default 0,
-  image_count integer default 0,
-  section_count integer default 0,
-  input_count integer default 0,
-  ds_component_count integer default 0,
-  tracked_component_count integer default 0,
-  untracked_button_count integer default 0,
-  untracked_form_count integer default 0,
-  ds_readiness text default 'low',
-  viewport_width integer,
-  viewport_height integer,
-  device_type text,
-  load_time_ms integer,
-  dom_ready_time_ms integer,
-  navigation_type text
-);
 
 create table if not exists public.observability_component_registry (
   id uuid primary key default gen_random_uuid(),
@@ -106,20 +52,39 @@ create table if not exists public.observability_journey_rules (
   created_at timestamptz not null default now()
 );
 
-create index if not exists idx_observability_page_events_system_id
-  on public.observability_page_events(system_id);
-
-create index if not exists idx_observability_page_events_created_at
-  on public.observability_page_events(created_at desc);
-
-create index if not exists idx_observability_page_events_path
-  on public.observability_page_events(path);
-
-create index if not exists idx_observability_page_events_hostname
-  on public.observability_page_events(hostname);
-
-create index if not exists idx_observability_page_events_ds_readiness
-  on public.observability_page_events(ds_readiness);
+alter table public.observability_page_events
+  add column if not exists hostname text,
+  add column if not exists origin text,
+  add column if not exists page_title text,
+  add column if not exists document_title text,
+  add column if not exists meta_title text,
+  add column if not exists og_title text,
+  add column if not exists twitter_title text,
+  add column if not exists h1 text,
+  add column if not exists canonical_url text,
+  add column if not exists meta_description text,
+  add column if not exists og_type text,
+  add column if not exists language text,
+  add column if not exists script_version text,
+  add column if not exists environment text default 'production',
+  add column if not exists heading_count integer default 0,
+  add column if not exists button_count integer default 0,
+  add column if not exists link_count integer default 0,
+  add column if not exists form_count integer default 0,
+  add column if not exists image_count integer default 0,
+  add column if not exists section_count integer default 0,
+  add column if not exists input_count integer default 0,
+  add column if not exists ds_component_count integer default 0,
+  add column if not exists tracked_component_count integer default 0,
+  add column if not exists untracked_button_count integer default 0,
+  add column if not exists untracked_form_count integer default 0,
+  add column if not exists ds_readiness text default 'low',
+  add column if not exists viewport_width integer,
+  add column if not exists viewport_height integer,
+  add column if not exists device_type text,
+  add column if not exists load_time_ms integer,
+  add column if not exists dom_ready_time_ms integer,
+  add column if not exists navigation_type text;
 
 create index if not exists idx_observability_component_usage_system_id
   on public.observability_component_usage(system_id);
@@ -135,6 +100,12 @@ create index if not exists idx_observability_design_debt_system_id
 
 create index if not exists idx_observability_design_debt_type
   on public.observability_design_debt(type);
+
+create index if not exists idx_observability_page_events_hostname
+  on public.observability_page_events(hostname);
+
+create index if not exists idx_observability_page_events_ds_readiness
+  on public.observability_page_events(ds_readiness);
 
 insert into public.observability_component_registry (name, category, status, version, description)
 values
