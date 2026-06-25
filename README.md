@@ -47,6 +47,12 @@ Para um banco antigo criado com o MVP inicial, rode:
 supabase/2026-06-18-product-evolution.sql
 ```
 
+Para evoluir um banco que já tinha a camada de product evolution, rode também:
+
+```txt
+supabase/2026-06-25-platform-evolution.sql
+```
+
 Depois configure as variáveis na Vercel:
 
 ```txt
@@ -114,9 +120,11 @@ O tracker também identifica sinais de dívida quando encontra páginas conectad
 
 Recebe eventos do tracker, registra o sistema, grava page events, uso de componentes e sinais de design debt.
 
+O endpoint também mantém estado atual por página, inventário atual de componentes e findings ativos deduplicados.
+
 `GET /api/systems`
 
-Agrega sistemas, páginas, registry, component usage e design debt para o dashboard.
+Agrega sistemas, páginas, registry, component usage, findings ativos, scores e design debt para o dashboard.
 
 `GET /api/health`
 

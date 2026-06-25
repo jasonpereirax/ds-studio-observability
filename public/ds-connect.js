@@ -1,5 +1,7 @@
 (function () {
-  var VERSION = "0.4.0-component-usage";
+  var VERSION = "0.5.0-platform-intelligence";
+  var lastSignature = null;
+  var lastSentAt = 0;
 
   function slugify(value) {
     return String(value || "")
@@ -178,7 +180,7 @@
     }
   }
 
-  function send(config) {
+  function send(config, reason) {
     config = config || {};
 
     var components = getComponentUsage();
@@ -207,6 +209,7 @@
       userAgent: navigator.userAgent,
       timestamp: new Date().toISOString(),
       status: "connected",
+      reason: reason || "heartbeat",
 
       title: metadata.title,
       pageTitle: metadata.pageTitle,
@@ -243,6 +246,28 @@
       navigationType: performanceData.navigationType
     };
 
+    var signature = [
+      payload.systemId,
+      payload.environment,
+      payload.path,
+      payload.dsComponentCount,
+      payload.trackedComponentCount,
+      payload.untrackedButtonCount,
+      payload.untrackedFormCount,
+      components.map(function (item) {
+        return [item.name, item.version || "", item.variant || "", item.token || "", item.count].join(":");
+      }).join(",")
+    ].join("|");
+    var now = Date.now();
+
+    if (config.dedupe !== false && signature === lastSignature && now - lastSentAt < 1500) {
+      if (config.debug) console.log("[DS Studio Connect] skipped duplicate heartbeat", payload);
+      return;
+    }
+
+    lastSignature = signature;
+    lastSentAt = now;
+
     try {
       fetch(endpoint, {
         method: "POST",
@@ -264,7 +289,7 @@
       status: "connected",
       version: VERSION,
       payload: payload,
-      ping: function () { send(config); }
+      ping: function () { send(config, "manual"); }
     };
 
     if (config.debug) console.log("[DS Studio Connect] heartbeat", payload);
@@ -273,15 +298,38 @@
   function init(options) {
     var config = options || {};
     var delay = typeof config.delay === "number" ? config.delay : 900;
+    var routeDelay = typeof config.routeDelay === "number" ? config.routeDelay : 650;
+    var routeTracking = config.routeTracking !== false;
+    var routeTimer = null;
 
-    function run() {
-      window.setTimeout(function () { send(config); }, delay);
+    function run(reason, wait) {
+      window.setTimeout(function () { send(config, reason); }, wait);
+    }
+
+    function scheduleRoutePing() {
+      window.clearTimeout(routeTimer);
+      routeTimer = window.setTimeout(function () { send(config, "route-change"); }, routeDelay);
     }
 
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", run, { once: true });
+      document.addEventListener("DOMContentLoaded", function () { run("initial", delay); }, { once: true });
     } else {
-      run();
+      run("initial", delay);
+    }
+
+    if (routeTracking && !window.__DS_STUDIO_ROUTE_TRACKING__) {
+      window.__DS_STUDIO_ROUTE_TRACKING__ = true;
+
+      ["pushState", "replaceState"].forEach(function (method) {
+        var original = history[method];
+        history[method] = function () {
+          var result = original.apply(this, arguments);
+          scheduleRoutePing();
+          return result;
+        };
+      });
+
+      window.addEventListener("popstate", scheduleRoutePing);
     }
   }
 

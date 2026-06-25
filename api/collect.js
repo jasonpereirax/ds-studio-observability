@@ -1,5 +1,9 @@
 import { cors, supabaseRequest } from "./_supabase.js";
 
+function enc(value) {
+  return encodeURIComponent(String(value ?? ""));
+}
+
 function inferJourney(path) {
   const value = String(path || "").toLowerCase();
   if (value.includes("checkout") || value.includes("cart") || value.includes("payment") || value.includes("carrinho") || value.includes("finalizar-compra")) return "Checkout";
@@ -19,6 +23,28 @@ function int(value) {
   if (value === undefined || value === null || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
+}
+
+function readinessScore(body) {
+  const ds = int(body.dsComponentCount) || 0;
+  const tracked = int(body.trackedComponentCount) || 0;
+  const buttons = int(body.buttonCount) || 0;
+  const forms = int(body.formCount) || 0;
+  const interactive = buttons + forms;
+  const coverage = interactive ? Math.min(1, (ds + tracked * 0.35) / Math.max(1, interactive)) : ds > 0 ? 1 : 0;
+  const breadth = Math.min(1, ds / 12);
+  return Math.round((coverage * 70) + (breadth * 30));
+}
+
+function confidenceScore(body) {
+  let score = 35;
+  if (body.version) score += 15;
+  if (body.hostname || body.origin) score += 10;
+  if (body.pageTitle || body.h1 || body.documentTitle) score += 10;
+  if (int(body.headingCount) !== null) score += 10;
+  if (int(body.viewportWidth) !== null) score += 10;
+  if (Array.isArray(body.components)) score += 10;
+  return Math.min(100, score);
 }
 
 function createDebtItems(body, pageEventId) {
@@ -68,6 +94,34 @@ function createDebtItems(body, pageEventId) {
   return items;
 }
 
+async function optionalSupabaseRequest(path, options = {}) {
+  try {
+    return await supabaseRequest(path, options);
+  } catch (error) {
+    console.warn("[collect optional]", path, error.message);
+    return null;
+  }
+}
+
+async function validatePublicKey(systemId, publicKey) {
+  const allowedKeys = String(process.env.OBSERVABILITY_PUBLIC_KEYS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (allowedKeys.length && !allowedKeys.includes(publicKey)) {
+    return { ok: false, status: 403, error: "Invalid public key" };
+  }
+
+  const existing = await supabaseRequest(`observability_systems?select=id,public_key&id=eq.${enc(systemId)}&limit=1`, { method: "GET" });
+  const current = existing?.[0];
+  if (current?.public_key && publicKey && current.public_key !== publicKey) {
+    return { ok: false, status: 403, error: "Public key does not match this system" };
+  }
+
+  return { ok: true };
+}
+
 export default async function handler(req, res) {
   cors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -80,10 +134,19 @@ export default async function handler(req, res) {
     const publicKey = String(body.publicKey || req.headers["x-ds-public-key"] || "").trim();
 
     if (!systemId) return res.status(400).json({ error: "systemId is required" });
+    if (!publicKey) return res.status(401).json({ error: "publicKey is required" });
+
+    const keyValidation = await validatePublicKey(systemId, publicKey);
+    if (!keyValidation.ok) return res.status(keyValidation.status).json({ error: keyValidation.error });
 
     const now = new Date().toISOString();
     const journey = body.journey || inferJourney(body.path || body.url);
     const title = str(body.pageTitle || body.title || body.h1 || body.ogTitle || body.documentTitle || body.path);
+    const path = str(body.path) || "/";
+    const environment = str(body.environment || "production");
+    const pageUrl = str(body.url) || "";
+    const pageReadinessScore = readinessScore(body);
+    const pageConfidenceScore = confidenceScore(body);
 
     await supabaseRequest("observability_systems", {
       method: "POST",
@@ -101,8 +164,8 @@ export default async function handler(req, res) {
       method: "POST",
       body: JSON.stringify({
         system_id: systemId,
-        path: str(body.path) || "/",
-        url: str(body.url) || "",
+        path,
+        url: pageUrl,
         title,
         journey,
         referrer: str(body.referrer),
@@ -123,7 +186,7 @@ export default async function handler(req, res) {
         og_type: str(body.ogType),
         language: str(body.language),
         script_version: str(body.version),
-        environment: str(body.environment || "production"),
+        environment,
 
         heading_count: int(body.headingCount) || 0,
         button_count: int(body.buttonCount) || 0,
@@ -150,14 +213,59 @@ export default async function handler(req, res) {
     const event = eventResponse?.[0] || null;
     const pageEventId = event?.id || null;
 
+    await optionalSupabaseRequest("observability_pages?on_conflict=system_id,path,environment", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify({
+        system_id: systemId,
+        path,
+        url: pageUrl,
+        title,
+        display_title: title,
+        journey,
+        hostname: str(body.hostname),
+        origin: str(body.origin),
+        environment,
+        page_title: str(body.pageTitle || body.title),
+        document_title: str(body.documentTitle),
+        h1: str(body.h1),
+        canonical_url: str(body.canonicalUrl),
+        meta_description: str(body.metaDescription),
+        language: str(body.language),
+        script_version: str(body.version),
+        heading_count: int(body.headingCount) || 0,
+        button_count: int(body.buttonCount) || 0,
+        link_count: int(body.linkCount) || 0,
+        form_count: int(body.formCount) || 0,
+        image_count: int(body.imageCount) || 0,
+        section_count: int(body.sectionCount) || 0,
+        input_count: int(body.inputCount) || 0,
+        ds_component_count: int(body.dsComponentCount) || 0,
+        tracked_component_count: int(body.trackedComponentCount) || 0,
+        untracked_button_count: int(body.untrackedButtonCount) || 0,
+        untracked_form_count: int(body.untrackedFormCount) || 0,
+        ds_readiness: str(body.dsReadiness || "low"),
+        readiness_score: pageReadinessScore,
+        confidence_score: pageConfidenceScore,
+        viewport_width: int(body.viewportWidth),
+        viewport_height: int(body.viewportHeight),
+        device_type: str(body.deviceType),
+        load_time_ms: int(body.loadTimeMs),
+        dom_ready_time_ms: int(body.domReadyTimeMs),
+        navigation_type: str(body.navigationType),
+        last_event_id: pageEventId,
+        last_seen_at: body.timestamp || now
+      })
+    });
+
     const components = Array.isArray(body.components) ? body.components : [];
     const usageRows = components
       .filter((component) => component && component.name)
       .map((component) => ({
         system_id: systemId,
         page_event_id: pageEventId,
-        page_path: str(body.path) || "/",
-        page_url: str(body.url) || "",
+        page_path: path,
+        page_url: pageUrl,
         journey,
         component_name: str(component.name),
         component_version: str(component.version),
@@ -174,11 +282,57 @@ export default async function handler(req, res) {
       });
     }
 
-    const debtRows = createDebtItems(body, pageEventId);
-    if (debtRows.length) {
-      await supabaseRequest("observability_design_debt", {
+    await optionalSupabaseRequest(`observability_component_inventory?system_id=eq.${enc(systemId)}&page_path=eq.${enc(path)}&environment=eq.${enc(environment)}`, {
+      method: "DELETE"
+    });
+
+    const inventoryRows = usageRows.map((row) => ({
+      system_id: row.system_id,
+      page_path: row.page_path,
+      page_url: row.page_url,
+      environment,
+      journey,
+      component_name: row.component_name,
+      component_version: row.component_version,
+      component_variant: row.component_variant,
+      component_token: row.component_token,
+      count: row.count,
+      last_seen_at: body.timestamp || now
+    }));
+
+    if (inventoryRows.length) {
+      await optionalSupabaseRequest("observability_component_inventory?on_conflict=system_id,page_path,environment,component_name,component_version,component_variant,component_token", {
         method: "POST",
-        body: JSON.stringify(debtRows)
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify(inventoryRows)
+      });
+    }
+
+    const debtRows = createDebtItems(body, pageEventId);
+    await optionalSupabaseRequest(`observability_findings?system_id=eq.${enc(systemId)}&page_path=eq.${enc(path)}&environment=eq.${enc(environment)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active: false, last_seen_at: body.timestamp || now, last_event_id: pageEventId })
+    });
+
+    const findingRows = debtRows.map((item) => ({
+      system_id: item.system_id,
+      page_path: item.page_path,
+      environment,
+      type: item.type,
+      severity: item.severity,
+      title: item.title,
+      description: item.description,
+      value: item.value,
+      active: true,
+      last_seen_at: body.timestamp || now,
+      last_event_id: pageEventId
+    }));
+
+    if (findingRows.length) {
+      await optionalSupabaseRequest("observability_findings?on_conflict=system_id,page_path,environment,type", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify(findingRows)
       });
     }
 
@@ -189,7 +343,9 @@ export default async function handler(req, res) {
       journey,
       title,
       components: usageRows.length,
-      debt: debtRows.length,
+      debt: findingRows.length,
+      readinessScore: pageReadinessScore,
+      confidenceScore: pageConfidenceScore,
       event
     });
   } catch (error) {

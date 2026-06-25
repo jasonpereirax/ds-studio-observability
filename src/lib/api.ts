@@ -25,6 +25,8 @@ export type ComponentRegistryItem = {
   name: string;
   category?: string;
   status?: string;
+  owner?: string;
+  maturity?: string;
   version?: string;
   description?: string;
 };
@@ -64,6 +66,8 @@ export type ObservabilityPage = {
   untracked_button_count?: number;
   untracked_form_count?: number;
   ds_readiness?: "low" | "medium" | "high";
+  readiness_score?: number;
+  confidence_score?: number;
   viewport_width?: number;
   viewport_height?: number;
   device_type?: string;
@@ -101,6 +105,12 @@ export type ObservabilitySystem = {
   totalDsComponents?: number;
   totalTrackedComponents?: number;
   dsReadiness?: "low" | "medium" | "high";
+  readinessScore?: number;
+  debtScore?: number;
+  impactScore?: number;
+  confidenceScore?: number;
+  adoptionScore?: number;
+  scoreReasons?: string[];
   componentUsage?: ComponentUsage[];
   designDebt?: DesignDebt[];
   pages: ObservabilityPage[];
@@ -112,6 +122,12 @@ export type SystemsResponse = {
   registry: ComponentRegistryItem[];
   globalComponents: ComponentUsage[];
   designDebt: DesignDebt[];
+  scores: {
+    adoptionScore: number;
+    readinessScore: number;
+    debtScore: number;
+    confidenceScore: number;
+  };
 };
 
 export async function getSystems(): Promise<SystemsResponse> {
@@ -123,6 +139,7 @@ export async function getSystems(): Promise<SystemsResponse> {
     systems: data.systems || [],
     registry: data.registry || [],
     globalComponents: data.globalComponents || [],
-    designDebt: data.designDebt || []
+    designDebt: data.designDebt || [],
+    scores: data.scores || { adoptionScore: 0, readinessScore: 0, debtScore: 0, confidenceScore: 0 }
   };
 }
