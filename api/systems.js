@@ -39,10 +39,86 @@ function average(items) {
   return items.length ? Math.round(items.reduce((sum, item) => sum + item, 0) / items.length) : 0;
 }
 
+function timestamp(value) {
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function earliest(values) {
+  const sorted = values.filter(Boolean).sort((a, b) => timestamp(a) - timestamp(b));
+  return sorted[0] || null;
+}
+
+function latest(values) {
+  const sorted = values.filter(Boolean).sort((a, b) => timestamp(b) - timestamp(a));
+  return sorted[0] || null;
+}
+
+function slugify(value) {
+  return String(value || "unknown")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function canonicalProjectKey(system) {
+  const host = system.sourceHost || safeUrl(system.sourceUrl || "")?.hostname || null;
+  const origin = system.sourceOrigin || null;
+  return origin || host || system.id;
+}
+
 function debtWeight(item) {
   if (item.severity === "high") return 25;
   if (item.severity === "medium") return 12;
   return 5;
+}
+
+function mergeComponentUsage(groups) {
+  const map = new Map();
+
+  groups.flat().forEach((component) => {
+    const current = map.get(component.name) || {
+      name: component.name,
+      count: 0,
+      pages: new Set(),
+      systems: new Set(),
+      variants: new Set(),
+      versions: new Set()
+    };
+
+    current.count += Number(component.count || 0);
+    (component.pages || []).forEach((page) => current.pages.add(page));
+    (component.systems || []).forEach((system) => current.systems.add(system));
+    (component.variants || []).forEach((variant) => current.variants.add(variant));
+    (component.versions || []).forEach((version) => current.versions.add(version));
+
+    map.set(component.name, current);
+  });
+
+  return Array.from(map.values()).map((item) => ({
+    name: item.name,
+    count: item.count,
+    pages: Array.from(item.pages),
+    systems: Array.from(item.systems),
+    variants: Array.from(item.variants),
+    versions: Array.from(item.versions)
+  })).sort((a, b) => b.count - a.count);
+}
+
+function mergePages(groups) {
+  const map = new Map();
+
+  groups.flat().forEach((page) => {
+    const key = `${page.environment || "production"}:${page.path}`;
+    const current = map.get(key);
+    if (!current || timestamp(page.last_seen_at || page.created_at) > timestamp(current.last_seen_at || current.created_at)) {
+      map.set(key, page);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => timestamp(b.last_seen_at || b.created_at) - timestamp(a.last_seen_at || a.created_at));
 }
 
 function groupByComponent(rows) {
@@ -200,17 +276,95 @@ export default async function handler(req, res) {
         recentEvents: systemEvents.slice(0, 20)
       };
     });
+    const activeWindowMinutes = Number(process.env.OBSERVABILITY_ACTIVE_WINDOW_MINUTES || 5);
+    const activeAfter = Date.now() - (Number.isFinite(activeWindowMinutes) ? activeWindowMinutes : 5) * 60 * 1000;
+    const groups = new Map();
+
+    enriched.forEach((system) => {
+      const key = canonicalProjectKey(system);
+      const current = groups.get(key) || [];
+      current.push(system);
+      groups.set(key, current);
+    });
+
+    const canonicalSystems = Array.from(groups.entries()).map(([key, group]) => {
+      const sorted = [...group].sort((a, b) => timestamp(b.last_seen_at) - timestamp(a.last_seen_at));
+      const primary = sorted[0];
+      const pages = mergePages(group.map((system) => system.pages || []));
+      const componentUsage = mergeComponentUsage(group.map((system) => system.componentUsage || []));
+      const designDebt = group.flatMap((system) => system.designDebt || []);
+      const recentEvents = group.flatMap((system) => system.recentEvents || [])
+        .sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at))
+        .slice(0, 30);
+      const journeys = Array.from(new Set(pages.map((page) => page.journey).filter(Boolean)));
+      const firstSeen = earliest(group.map((system) => system.first_seen_at));
+      const lastSeen = latest(group.map((system) => system.last_seen_at));
+      const isCurrentlyConnected = timestamp(lastSeen) >= activeAfter;
+      const readiness = average(pages.map(readinessPercent));
+      const debtScore = Math.max(0, 100 - designDebt.reduce((sum, item) => sum + debtWeight(item), 0));
+      const confidenceScore = average(pages.map((page) => Number(page.confidence_score || 0)).filter(Boolean));
+      const adoptionScore = Math.round((readiness * 0.55) + (debtScore * 0.25) + (confidenceScore * 0.2));
+      const averageReadiness = pages.length
+        ? pages.reduce((sum, page) => sum + readinessScore(page.ds_readiness), 0) / pages.length
+        : 0;
+      const dsReadiness = averageReadiness >= 2.5 ? "high" : averageReadiness >= 1.5 ? "medium" : "low";
+      const scoreReasons = createScoreReasons({ pages, systemDebt: designDebt, componentUsage });
+      const sourceHost = primary.sourceHost || safeUrl(primary.sourceUrl || "")?.hostname || slugify(key);
+      const displayName = sourceHost || primary.name;
+
+      return {
+        ...primary,
+        id: `project-${slugify(key)}`,
+        rawSystemIds: group.map((system) => system.id),
+        name: displayName,
+        canonicalKey: key,
+        aliases: group.map((system) => ({
+          id: system.id,
+          name: system.name,
+          publicKey: system.public_key,
+          firstSeenAt: system.first_seen_at,
+          lastSeenAt: system.last_seen_at,
+          active: timestamp(system.last_seen_at) >= activeAfter
+        })),
+        aliasCount: group.length,
+        connected: isCurrentlyConnected,
+        isCurrentlyConnected,
+        activeWindowMinutes,
+        first_seen_at: firstSeen || primary.first_seen_at,
+        last_seen_at: lastSeen || primary.last_seen_at,
+        sourceHost,
+        sourceOrigin: primary.sourceOrigin || (primary.sourceUrl ? safeUrl(primary.sourceUrl)?.origin : null),
+        activePages: pages.length,
+        journeys: journeys.length,
+        totalDsComponents: componentUsage.reduce((sum, item) => sum + item.count, 0),
+        totalTrackedComponents: pages.reduce((sum, page) => sum + Number(page.tracked_component_count || 0), 0),
+        dsReadiness,
+        readinessScore: readiness,
+        debtScore,
+        confidenceScore,
+        adoptionScore,
+        impactScore: Math.min(100, componentUsage.reduce((sum, item) => sum + (item.pages.length * item.systems.length * 4), 0)),
+        scoreReasons,
+        componentUsage,
+        designDebt,
+        pages,
+        recentEvents
+      };
+    }).sort((a, b) => timestamp(b.last_seen_at) - timestamp(a.last_seen_at));
+
+    const activeSystems = canonicalSystems.filter((system) => system.isCurrentlyConnected);
 
     return res.status(200).json({
-      systems: enriched,
+      systems: canonicalSystems,
+      activeSystems,
       registry,
       globalComponents,
       designDebt: effectiveDebt,
       scores: {
-        adoptionScore: average(enriched.map((system) => system.adoptionScore || 0)),
-        readinessScore: average(enriched.map((system) => system.readinessScore || 0)),
-        debtScore: average(enriched.map((system) => system.debtScore || 0)),
-        confidenceScore: average(enriched.map((system) => system.confidenceScore || 0))
+        adoptionScore: average(activeSystems.map((system) => system.adoptionScore || 0)),
+        readinessScore: average(activeSystems.map((system) => system.readinessScore || 0)),
+        debtScore: average(activeSystems.map((system) => system.debtScore || 0)),
+        confidenceScore: average(activeSystems.map((system) => system.confidenceScore || 0))
       }
     });
   } catch (error) {

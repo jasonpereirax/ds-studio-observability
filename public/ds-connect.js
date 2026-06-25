@@ -300,6 +300,7 @@
     var delay = typeof config.delay === "number" ? config.delay : 900;
     var routeDelay = typeof config.routeDelay === "number" ? config.routeDelay : 650;
     var routeTracking = config.routeTracking !== false;
+    var heartbeatInterval = typeof config.heartbeatInterval === "number" ? config.heartbeatInterval : 60000;
     var routeTimer = null;
 
     function run(reason, wait) {
@@ -330,6 +331,12 @@
       });
 
       window.addEventListener("popstate", scheduleRoutePing);
+    }
+
+    if (heartbeatInterval > 0 && !window.__DS_STUDIO_HEARTBEAT_TIMER__) {
+      window.__DS_STUDIO_HEARTBEAT_TIMER__ = window.setInterval(function () {
+        send(config, "heartbeat");
+      }, heartbeatInterval);
     }
   }
 

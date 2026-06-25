@@ -16,6 +16,7 @@ type ViewMode = "overview" | "project" | "install" | "registry" | "graph" | "imp
 
 export default function App() {
   const [systems, setSystems] = useState<ObservabilitySystem[]>([]);
+  const [activeSystems, setActiveSystems] = useState<ObservabilitySystem[]>([]);
   const [registry, setRegistry] = useState<ComponentRegistryItem[]>([]);
   const [globalComponents, setGlobalComponents] = useState<ComponentUsage[]>([]);
   const [designDebt, setDesignDebt] = useState<DesignDebt[]>([]);
@@ -23,6 +24,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   async function load() {
     setLoading(true);
@@ -31,10 +33,12 @@ export default function App() {
     try {
       const response = await getSystems();
       setSystems(response.systems);
+      setActiveSystems(response.activeSystems);
       setRegistry(response.registry);
       setGlobalComponents(response.globalComponents);
       setDesignDebt(response.designDebt);
       setSelectedSystemId((current) => current || response.systems[0]?.id || null);
+      setLastUpdatedAt(new Date());
     } catch (err: any) {
       setError(err?.message || "Erro ao carregar dados.");
     } finally {
@@ -51,6 +55,10 @@ export default function App() {
   const selectedSystem = useMemo(() => {
     return systems.find((system) => system.id === selectedSystemId) || systems[0] || null;
   }, [systems, selectedSystemId]);
+
+  const lastUpdatedLabel = lastUpdatedAt
+    ? `Última atualização às ${lastUpdatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+    : "Aguardando primeira atualização";
 
   function selectProject(systemId: string) {
     setSelectedSystemId(systemId);
@@ -120,6 +128,8 @@ export default function App() {
           </div>
 
           <div className="topbar-actions">
+            <span className="last-updated">{lastUpdatedLabel}</span>
+
             {viewMode !== "overview" && (
               <button className="button secondary" onClick={() => setViewMode("overview")}>
                 Voltar ao overview
@@ -140,7 +150,7 @@ export default function App() {
           </div>
         )}
 
-        {viewMode === "overview" && <GlobalOverview systems={systems} onSelectProject={selectProject} />}
+        {viewMode === "overview" && <GlobalOverview systems={systems} activeSystems={activeSystems} onSelectProject={selectProject} />}
         {viewMode === "project" && (
           <section className="project-layout">
             <aside className="project-rail">

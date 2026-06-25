@@ -80,9 +80,22 @@ export type ObservabilityPage = {
 
 export type ObservabilitySystem = {
   id: string;
+  canonicalKey?: string;
+  rawSystemIds?: string[];
   name: string;
   public_key?: string;
   connected: boolean;
+  isCurrentlyConnected?: boolean;
+  activeWindowMinutes?: number;
+  aliasCount?: number;
+  aliases?: Array<{
+    id: string;
+    name: string;
+    publicKey?: string;
+    firstSeenAt?: string;
+    lastSeenAt?: string;
+    active?: boolean;
+  }>;
   first_seen_at: string;
   last_seen_at?: string;
   sourceHost?: string | null;
@@ -119,6 +132,7 @@ export type ObservabilitySystem = {
 
 export type SystemsResponse = {
   systems: ObservabilitySystem[];
+  activeSystems: ObservabilitySystem[];
   registry: ComponentRegistryItem[];
   globalComponents: ComponentUsage[];
   designDebt: DesignDebt[];
@@ -137,6 +151,7 @@ export async function getSystems(): Promise<SystemsResponse> {
 
   return {
     systems: data.systems || [],
+    activeSystems: data.activeSystems || [],
     registry: data.registry || [],
     globalComponents: data.globalComponents || [],
     designDebt: data.designDebt || [],
