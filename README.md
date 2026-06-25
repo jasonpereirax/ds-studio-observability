@@ -5,6 +5,7 @@ Módulo independente de observabilidade para acompanhar adoção, cobertura e d�
 O produto evoluiu de um simples sinal de "site conectado" para uma camada de **DS Usage Intelligence**:
 
 - projetos conectados
+- cobertura monitorada por URL
 - páginas e jornadas mapeadas
 - metadata de página e contexto técnico
 - runtime component tracking com `data-ds-component`
@@ -53,6 +54,12 @@ Para evoluir um banco que já tinha a camada de product evolution, rode também:
 supabase/2026-06-25-platform-evolution.sql
 ```
 
+Para bancos que já estavam na platform evolution antes do monitoramento ativo, rode:
+
+```txt
+supabase/2026-06-25-active-coverage-monitoring.sql
+```
+
 Depois configure as variáveis na Vercel:
 
 ```txt
@@ -80,6 +87,12 @@ Endpoint de coleta:
 
 ```txt
 https://SEU-DOMINIO.vercel.app/api/collect
+```
+
+Endpoint de checagem ativa de cobertura:
+
+```txt
+https://SEU-DOMINIO.vercel.app/api/coverage-check
 ```
 
 ## Snippet Para Site Externo
@@ -114,6 +127,37 @@ Para alimentar registry, graph e impact analysis, marque componentes do Design S
 
 O tracker também identifica sinais de dívida quando encontra páginas conectadas sem componentes DS, botões sem instrumentação ou formulários sem marcação.
 
+## Checagem Ativa De Cobertura
+
+O runtime tracker depende de uma página ser aberta em algum navegador. Para cobertura arquitetural, use o endpoint de checagem ativa.
+
+```bash
+curl -X POST https://SEU-DOMINIO.vercel.app/api/coverage-check \
+  -H "Content-Type: application/json" \
+  -H "x-ds-monitor-key: MONITOR_KEY" \
+  -d '{
+    "urls": [
+      {
+        "url": "https://produto.exemplo.com/",
+        "systemId": "produto-exemplo",
+        "systemName": "Produto Exemplo",
+        "environment": "production"
+      }
+    ]
+  }'
+```
+
+Se `OBSERVABILITY_MONITOR_KEY` estiver configurada, o header `x-ds-monitor-key` é obrigatório.
+
+A checagem ativa visita a URL, detecta presença do snippet no HTML, extrai marcadores `data-ds-component` disponíveis no documento inicial e atualiza:
+
+- `observability_monitored_urls`
+- `observability_coverage_checks`
+- `observability_pages`
+- `observability_component_inventory`
+
+Runtime activity e coverage monitoring são sinais diferentes. A dashboard deve usar coverage monitoring para cobertura e runtime activity para saúde de execução.
+
 ## APIs
 
 `POST /api/collect`
@@ -129,6 +173,10 @@ Agrega sistemas, páginas, registry, component usage, findings ativos, scores e 
 `GET /api/health`
 
 Verifica se o módulo está respondendo.
+
+`POST /api/coverage-check`
+
+Executa uma checagem ativa de cobertura em URLs informadas ou nas URLs monitoradas ativas.
 
 ## Notas De Produto
 

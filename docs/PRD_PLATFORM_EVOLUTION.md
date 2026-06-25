@@ -85,6 +85,7 @@ The platform now includes:
 - Current page state via `observability_pages`.
 - Current component inventory via `observability_component_inventory`.
 - Active deduplicated findings via `observability_findings`.
+- Active coverage monitoring via `observability_monitored_urls` and `observability_coverage_checks`.
 - Component registry.
 - Registry coverage and unknown component detection.
 - Impact analysis with severity filters.
@@ -131,6 +132,24 @@ Future considerations:
 - Rotate public keys per project.
 - Add project-level allowed origins.
 - Add rate limiting.
+
+### 8.2.1 Active Coverage Monitoring
+
+Runtime events are not enough to represent architecture coverage because they depend on someone opening the page.
+
+Requirements:
+
+- The platform can actively check configured URLs.
+- A coverage check detects whether the DS Studio snippet is present.
+- A coverage check records status: `ok`, `missing_snippet`, `http_error`, `timeout`, or `fetch_error`.
+- A coverage check updates current page state and component inventory when possible.
+- Coverage status must be treated separately from runtime heartbeat.
+- Lack of runtime traffic must not imply snippet removal.
+
+Limitations:
+
+- The first implementation reads the initial HTML response.
+- Components rendered only after client-side JavaScript may require a future browser-based checker.
 
 ### 8.3 Runtime Tracker
 

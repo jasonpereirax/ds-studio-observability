@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bot, Copy, GitBranch, Layers, RefreshCw, SearchCode, TriangleAlert, Wifi } from "lucide-react";
-import { getSystems, type ComponentRegistryItem, type ComponentUsage, type DesignDebt, type ObservabilitySystem } from "./lib/api";
+import { getSystems, type ComponentRegistryItem, type ComponentUsage, type CoverageCheck, type DesignDebt, type ObservabilitySystem } from "./lib/api";
 import { GlobalOverview } from "./components/GlobalOverview";
 import { ProjectList } from "./components/ProjectList";
 import { ProjectDetail } from "./components/ProjectDetail";
@@ -20,6 +20,7 @@ export default function App() {
   const [registry, setRegistry] = useState<ComponentRegistryItem[]>([]);
   const [globalComponents, setGlobalComponents] = useState<ComponentUsage[]>([]);
   const [designDebt, setDesignDebt] = useState<DesignDebt[]>([]);
+  const [coverageChecks, setCoverageChecks] = useState<CoverageCheck[]>([]);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
   const [loading, setLoading] = useState(false);
@@ -37,6 +38,7 @@ export default function App() {
       setRegistry(response.registry);
       setGlobalComponents(response.globalComponents);
       setDesignDebt(response.designDebt);
+      setCoverageChecks(response.coverage.latestChecks);
       setSelectedSystemId((current) => current || response.systems[0]?.id || null);
       setLastUpdatedAt(new Date());
     } catch (err: any) {
@@ -150,7 +152,7 @@ export default function App() {
           </div>
         )}
 
-        {viewMode === "overview" && <GlobalOverview systems={systems} activeSystems={activeSystems} onSelectProject={selectProject} />}
+        {viewMode === "overview" && <GlobalOverview systems={systems} activeSystems={activeSystems} coverageChecks={coverageChecks} onSelectProject={selectProject} />}
         {viewMode === "project" && (
           <section className="project-layout">
             <aside className="project-rail">

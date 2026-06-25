@@ -182,6 +182,8 @@ export default async function handler(req, res) {
     const currentPages = await optionalSupabaseRequest("observability_pages?select=*&order=last_seen_at.desc&limit=2000", { method: "GET" });
     const inventory = await optionalSupabaseRequest("observability_component_inventory?select=*&order=last_seen_at.desc&limit=4000", { method: "GET" });
     const findings = await optionalSupabaseRequest("observability_findings?select=*&active=eq.true&order=last_seen_at.desc&limit=2000", { method: "GET" });
+    const monitoredUrls = await optionalSupabaseRequest("observability_monitored_urls?select=*&order=last_checked_at.desc.nullslast&limit=2000", { method: "GET" });
+    const coverageChecks = await optionalSupabaseRequest("observability_coverage_checks?select=*&order=checked_at.desc&limit=2000", { method: "GET" });
 
     const effectiveComponentRows = inventory.length ? inventory : usage;
     const effectiveDebt = findings.length ? findings.map((item) => ({ ...item, created_at: item.last_seen_at || item.first_seen_at })) : debt;
@@ -192,6 +194,8 @@ export default async function handler(req, res) {
       const systemCurrentPages = currentPages.filter((page) => page.system_id === system.id);
       const systemUsage = effectiveComponentRows.filter((item) => item.system_id === system.id);
       const systemDebt = effectiveDebt.filter((item) => item.system_id === system.id);
+      const systemMonitoredUrls = monitoredUrls.filter((item) => item.system_id === system.id);
+      const systemCoverageChecks = coverageChecks.filter((item) => item.system_id === system.id);
       const componentUsage = groupByComponent(systemUsage);
       const pageMap = new Map();
 
@@ -272,6 +276,8 @@ export default async function handler(req, res) {
         scoreReasons,
         componentUsage,
         designDebt: systemDebt,
+        monitoredUrls: systemMonitoredUrls,
+        coverageChecks: systemCoverageChecks.slice(0, 20),
         pages,
         recentEvents: systemEvents.slice(0, 20)
       };
@@ -296,6 +302,11 @@ export default async function handler(req, res) {
       const recentEvents = group.flatMap((system) => system.recentEvents || [])
         .sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at))
         .slice(0, 30);
+      const monitoredUrls = group.flatMap((system) => system.monitoredUrls || [])
+        .sort((a, b) => timestamp(b.last_checked_at) - timestamp(a.last_checked_at));
+      const coverageChecks = group.flatMap((system) => system.coverageChecks || [])
+        .sort((a, b) => timestamp(b.checked_at) - timestamp(a.checked_at))
+        .slice(0, 30);
       const journeys = Array.from(new Set(pages.map((page) => page.journey).filter(Boolean)));
       const firstSeen = earliest(group.map((system) => system.first_seen_at));
       const lastSeen = latest(group.map((system) => system.last_seen_at));
@@ -311,6 +322,13 @@ export default async function handler(req, res) {
       const scoreReasons = createScoreReasons({ pages, systemDebt: designDebt, componentUsage });
       const sourceHost = primary.sourceHost || safeUrl(primary.sourceUrl || "")?.hostname || slugify(key);
       const displayName = sourceHost || primary.name;
+      const monitoredCount = monitoredUrls.length || pages.filter((page) => page.coverage_checked_at).length;
+      const coverageOk = pages.filter((page) => page.coverage_status === "ok" || page.snippet_detected).length;
+      const missingSnippet = pages.filter((page) => page.coverage_status === "missing_snippet").length;
+      const latestCoverageCheckAt = latest([
+        ...coverageChecks.map((check) => check.checked_at),
+        ...pages.map((page) => page.coverage_checked_at)
+      ]);
 
       return {
         ...primary,
@@ -329,6 +347,10 @@ export default async function handler(req, res) {
         aliasCount: group.length,
         connected: isCurrentlyConnected,
         isCurrentlyConnected,
+        monitoredUrlCount: monitoredCount,
+        coverageOk,
+        missingSnippet,
+        latestCoverageCheckAt,
         activeWindowMinutes,
         first_seen_at: firstSeen || primary.first_seen_at,
         last_seen_at: lastSeen || primary.last_seen_at,
@@ -347,6 +369,8 @@ export default async function handler(req, res) {
         scoreReasons,
         componentUsage,
         designDebt,
+        monitoredUrls,
+        coverageChecks,
         pages,
         recentEvents
       };
@@ -360,6 +384,12 @@ export default async function handler(req, res) {
       registry,
       globalComponents,
       designDebt: effectiveDebt,
+      coverage: {
+        monitoredUrls: monitoredUrls.length,
+        latestChecks: coverageChecks.slice(0, 50),
+        ok: coverageChecks.filter((check) => check.status === "ok").length,
+        missingSnippet: coverageChecks.filter((check) => check.status === "missing_snippet").length
+      },
       scores: {
         adoptionScore: average(activeSystems.map((system) => system.adoptionScore || 0)),
         readinessScore: average(activeSystems.map((system) => system.readinessScore || 0)),

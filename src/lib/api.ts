@@ -74,8 +74,45 @@ export type ObservabilityPage = {
   load_time_ms?: number;
   dom_ready_time_ms?: number;
   navigation_type?: string;
+  last_signal_source?: "runtime" | "coverage-check" | string;
+  coverage_status?: "ok" | "missing_snippet" | "http_error" | "timeout" | "fetch_error" | "unknown" | string;
+  coverage_checked_at?: string;
+  snippet_detected?: boolean;
+  monitored_url_id?: string;
   components?: ComponentUsage[];
   debt?: DesignDebt[];
+};
+
+export type MonitoredUrl = {
+  id: string;
+  system_id: string;
+  url: string;
+  environment?: string;
+  active: boolean;
+  frequency_minutes?: number;
+  first_seen_at?: string;
+  last_checked_at?: string;
+  last_status?: string;
+  last_error?: string;
+};
+
+export type CoverageCheck = {
+  id: string;
+  monitored_url_id?: string;
+  system_id: string;
+  url: string;
+  path: string;
+  environment?: string;
+  status: string;
+  http_status?: number;
+  snippet_detected: boolean;
+  tracker_detected: boolean;
+  snippet_version?: string;
+  component_count: number;
+  readiness_score?: number;
+  confidence_score?: number;
+  error?: string;
+  checked_at: string;
 };
 
 export type ObservabilitySystem = {
@@ -88,6 +125,10 @@ export type ObservabilitySystem = {
   isCurrentlyConnected?: boolean;
   activeWindowMinutes?: number;
   aliasCount?: number;
+  monitoredUrlCount?: number;
+  coverageOk?: number;
+  missingSnippet?: number;
+  latestCoverageCheckAt?: string | null;
   aliases?: Array<{
     id: string;
     name: string;
@@ -126,6 +167,8 @@ export type ObservabilitySystem = {
   scoreReasons?: string[];
   componentUsage?: ComponentUsage[];
   designDebt?: DesignDebt[];
+  monitoredUrls?: MonitoredUrl[];
+  coverageChecks?: CoverageCheck[];
   pages: ObservabilityPage[];
   recentEvents: ObservabilityPage[];
 };
@@ -136,6 +179,12 @@ export type SystemsResponse = {
   registry: ComponentRegistryItem[];
   globalComponents: ComponentUsage[];
   designDebt: DesignDebt[];
+  coverage: {
+    monitoredUrls: number;
+    latestChecks: CoverageCheck[];
+    ok: number;
+    missingSnippet: number;
+  };
   scores: {
     adoptionScore: number;
     readinessScore: number;
@@ -155,6 +204,7 @@ export async function getSystems(): Promise<SystemsResponse> {
     registry: data.registry || [],
     globalComponents: data.globalComponents || [],
     designDebt: data.designDebt || [],
+    coverage: data.coverage || { monitoredUrls: 0, latestChecks: [], ok: 0, missingSnippet: 0 },
     scores: data.scores || { adoptionScore: 0, readinessScore: 0, debtScore: 0, confidenceScore: 0 }
   };
 }

@@ -45,10 +45,55 @@ create table if not exists public.observability_pages (
   load_time_ms integer,
   dom_ready_time_ms integer,
   navigation_type text,
+  last_signal_source text default 'runtime',
+  coverage_status text default 'unknown',
+  coverage_checked_at timestamptz,
+  snippet_detected boolean,
+  monitored_url_id uuid,
   last_event_id uuid references public.observability_page_events(id) on delete set null,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   unique(system_id, path, environment)
+);
+
+alter table public.observability_pages
+  add column if not exists last_signal_source text default 'runtime',
+  add column if not exists coverage_status text default 'unknown',
+  add column if not exists coverage_checked_at timestamptz,
+  add column if not exists snippet_detected boolean,
+  add column if not exists monitored_url_id uuid;
+
+create table if not exists public.observability_monitored_urls (
+  id uuid primary key default gen_random_uuid(),
+  system_id text not null references public.observability_systems(id) on delete cascade,
+  url text not null,
+  environment text default 'production',
+  active boolean not null default true,
+  frequency_minutes integer not null default 1440,
+  first_seen_at timestamptz not null default now(),
+  last_checked_at timestamptz,
+  last_status text default 'pending',
+  last_error text,
+  unique(system_id, url, environment)
+);
+
+create table if not exists public.observability_coverage_checks (
+  id uuid primary key default gen_random_uuid(),
+  monitored_url_id uuid references public.observability_monitored_urls(id) on delete set null,
+  system_id text not null references public.observability_systems(id) on delete cascade,
+  url text not null,
+  path text not null,
+  environment text default 'production',
+  status text not null,
+  http_status integer,
+  snippet_detected boolean not null default false,
+  tracker_detected boolean not null default false,
+  snippet_version text,
+  component_count integer not null default 0,
+  readiness_score integer default 0,
+  confidence_score integer default 0,
+  error text,
+  checked_at timestamptz not null default now()
 );
 
 create table if not exists public.observability_component_inventory (
@@ -63,10 +108,14 @@ create table if not exists public.observability_component_inventory (
   component_variant text,
   component_token text,
   count integer not null default 1,
+  last_signal_source text default 'runtime',
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   unique(system_id, page_path, environment, component_name, component_version, component_variant, component_token)
 );
+
+alter table public.observability_component_inventory
+  add column if not exists last_signal_source text default 'runtime';
 
 create table if not exists public.observability_findings (
   id uuid primary key default gen_random_uuid(),
@@ -90,6 +139,21 @@ create index if not exists idx_observability_pages_system_id
 
 create index if not exists idx_observability_pages_readiness
   on public.observability_pages(ds_readiness);
+
+create index if not exists idx_observability_pages_coverage_status
+  on public.observability_pages(coverage_status);
+
+create index if not exists idx_observability_monitored_urls_system_id
+  on public.observability_monitored_urls(system_id);
+
+create index if not exists idx_observability_monitored_urls_active
+  on public.observability_monitored_urls(active);
+
+create index if not exists idx_observability_coverage_checks_system_id
+  on public.observability_coverage_checks(system_id);
+
+create index if not exists idx_observability_coverage_checks_checked_at
+  on public.observability_coverage_checks(checked_at desc);
 
 create index if not exists idx_observability_component_inventory_system_id
   on public.observability_component_inventory(system_id);

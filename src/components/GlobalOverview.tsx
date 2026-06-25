@@ -1,8 +1,8 @@
 import { Activity, ArrowUpRight, GitBranch, Layers, Target } from "lucide-react";
-import type { ObservabilitySystem } from "../lib/api";
+import type { CoverageCheck, ObservabilitySystem } from "../lib/api";
 import { ReadinessPill } from "./ReadinessPill";
 
-type Props = { systems: ObservabilitySystem[]; activeSystems: ObservabilitySystem[]; onSelectProject: (systemId: string) => void };
+type Props = { systems: ObservabilitySystem[]; activeSystems: ObservabilitySystem[]; coverageChecks: CoverageCheck[]; onSelectProject: (systemId: string) => void };
 
 function readinessScore(value?: string | null) {
   if (value === "high") return 100;
@@ -15,15 +15,20 @@ function formatDate(value?: string) {
   return new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-export function GlobalOverview({ systems, activeSystems, onSelectProject }: Props) {
-  const currentSystems = activeSystems.length ? activeSystems : systems.filter((system) => system.isCurrentlyConnected);
-  const activePages = currentSystems.reduce((sum, system) => sum + (system.activePages || 0), 0);
-  const journeys = currentSystems.reduce((sum, system) => sum + (system.journeys || 0), 0);
-  const dsComponents = currentSystems.reduce((sum, system) => sum + (system.totalDsComponents || 0), 0);
-  const score = currentSystems.length ? Math.round(currentSystems.reduce((sum, system) => sum + (system.adoptionScore ?? readinessScore(system.dsReadiness)), 0) / currentSystems.length) : 0;
-  const lowReadiness = currentSystems.filter((system) => (system.dsReadiness || "low") === "low");
-  const debtSignals = currentSystems.reduce((sum, system) => sum + (system.designDebt?.length || 0), 0);
-  const confidence = currentSystems.length ? Math.round(currentSystems.reduce((sum, system) => sum + (system.confidenceScore || 0), 0) / currentSystems.length) : 0;
+export function GlobalOverview({ systems, activeSystems, coverageChecks, onSelectProject }: Props) {
+  const runtimeActive = activeSystems.length;
+  const detectedSystems = systems.filter((system) => (system.monitoredUrlCount || system.pages?.length || 0) > 0);
+  const coverageOk = systems.reduce((sum, system) => sum + (system.coverageOk || 0), 0);
+  const missingSnippet = systems.reduce((sum, system) => sum + (system.missingSnippet || 0), 0);
+  const latestCoverageChecks = systems.map((system) => system.latestCoverageCheckAt).filter(Boolean).sort();
+  const latestCoverageCheck = coverageChecks[0]?.checked_at || latestCoverageChecks[latestCoverageChecks.length - 1];
+  const activePages = detectedSystems.reduce((sum, system) => sum + (system.activePages || 0), 0);
+  const journeys = detectedSystems.reduce((sum, system) => sum + (system.journeys || 0), 0);
+  const dsComponents = detectedSystems.reduce((sum, system) => sum + (system.totalDsComponents || 0), 0);
+  const score = detectedSystems.length ? Math.round(detectedSystems.reduce((sum, system) => sum + (system.adoptionScore ?? readinessScore(system.dsReadiness)), 0) / detectedSystems.length) : 0;
+  const lowReadiness = detectedSystems.filter((system) => (system.dsReadiness || "low") === "low");
+  const debtSignals = detectedSystems.reduce((sum, system) => sum + (system.designDebt?.length || 0), 0);
+  const confidence = detectedSystems.length ? Math.round(detectedSystems.reduce((sum, system) => sum + (system.confidenceScore || 0), 0) / detectedSystems.length) : 0;
   const historicalAliases = systems.flatMap((system) => (system.aliases || []).map((alias) => ({ ...alias, projectName: system.name, projectId: system.id, aliasCount: system.aliasCount || 1 })));
 
   return (
@@ -32,34 +37,34 @@ export function GlobalOverview({ systems, activeSystems, onSelectProject }: Prop
         <div>
           <span className="label accent">DS adoption signal</span>
           <h2>{score >= 75 ? "Alta adoção" : score >= 45 ? "Adoção parcial" : "Baixa instrumentação"}</h2>
-          <p>{currentSystems.length ? `${currentSystems.length} projeto(s) conectado(s) agora, ${activePages} página(s) mapeada(s) e ${dsComponents} componente(s) DS detectado(s).` : "Nenhum projeto com snippet ativo neste momento. O histórico continua disponível abaixo."}</p>
+          <p>{detectedSystems.length ? `${detectedSystems.length} projeto(s) com cobertura detectada, ${activePages} página(s) mapeada(s) e ${dsComponents} componente(s) DS detectado(s).` : "Nenhum projeto monitorado ainda. Cadastre URLs ou rode uma checagem de cobertura."}</p>
         </div>
         <div className="adoption-score"><span>Adoption Score</span><strong>{score}%</strong></div>
       </section>
 
       <section className="overview-stats">
-        <article className="stat-card panel"><Layers size={18} /><span className="label">Connected now</span><strong>{currentSystems.length}</strong><p>projetos com heartbeat recente</p></article>
+        <article className="stat-card panel"><Layers size={18} /><span className="label">Coverage detected</span><strong>{detectedSystems.length}</strong><p>{runtimeActive} com runtime recente</p></article>
         <article className="stat-card panel"><Activity size={18} /><span className="label">Mapped pages</span><strong>{activePages}</strong><p>páginas descobertas pelo script</p></article>
         <article className="stat-card panel"><GitBranch size={18} /><span className="label">Detected flows</span><strong>{journeys}</strong><p>jornadas agrupadas automaticamente</p></article>
         <article className="stat-card panel"><Target size={18} /><span className="label">DS components</span><strong>{dsComponents}</strong><p>componentes com data-ds-component</p></article>
       </section>
       <section className="overview-stats compact-stats">
         <article className="stat-card panel"><span className="label">Confidence</span><strong>{confidence}%</strong><p>qualidade dos sinais coletados</p></article>
-        <article className="stat-card panel"><span className="label">Debt signals</span><strong>{debtSignals}</strong><p>findings ativos de instrumentação</p></article>
-        <article className="stat-card panel"><span className="label">Average readiness</span><strong>{currentSystems.length ? Math.round(currentSystems.reduce((sum, system) => sum + (system.readinessScore || readinessScore(system.dsReadiness)), 0) / currentSystems.length) : 0}%</strong><p>cobertura atual do DS</p></article>
-        <article className="stat-card panel"><span className="label">Debt health</span><strong>{currentSystems.length ? Math.round(currentSystems.reduce((sum, system) => sum + (system.debtScore || 0), 0) / currentSystems.length) : 0}%</strong><p>quanto menor a dívida, maior o score</p></article>
+        <article className="stat-card panel"><span className="label">Coverage OK</span><strong>{coverageOk}</strong><p>páginas com snippet detectado</p></article>
+        <article className="stat-card panel"><span className="label">Missing snippet</span><strong>{missingSnippet}</strong><p>páginas monitoradas sem snippet</p></article>
+        <article className="stat-card panel"><span className="label">Last coverage check</span><strong>{latestCoverageCheck ? formatDate(latestCoverageCheck) : "—"}</strong><p>checagem feita pelo DS Studio</p></article>
       </section>
 
       <section className="overview-grid">
         <article className="panel">
-          <div className="panel-header"><div><span className="label accent">Projects</span><h2>Projetos usando o DS agora</h2><p>Somente origens com heartbeat recente entram nesta lista. Testes antigos ficam no histórico.</p></div></div>
+          <div className="panel-header"><div><span className="label accent">Projects</span><h2>Projetos com cobertura DS</h2><p>Origens detectadas por runtime ou por checagem ativa do DS Studio. Acesso de usuário não é requisito para aparecer aqui.</p></div></div>
           <div className="project-table">
-            {currentSystems.length ? currentSystems.map((system) => (
+            {detectedSystems.length ? detectedSystems.map((system) => (
               <button key={system.id} className="project-row" onClick={() => onSelectProject(system.id)}>
-                <div><strong>{system.name}</strong><span>{system.sourceHost || system.id} · visto às {formatDate(system.last_seen_at)}</span></div>
-                <div className="project-row-meta"><span>{system.adoptionScore || 0}% adoption</span><span>{system.activePages || 0} pages</span><span>{system.totalDsComponents || 0} DS components</span><ReadinessPill value={system.dsReadiness || "low"} /><ArrowUpRight size={16} /></div>
+                <div><strong>{system.name}</strong><span>{system.sourceHost || system.id} · última leitura {formatDate(system.latestCoverageCheckAt || system.last_seen_at)}</span></div>
+                <div className="project-row-meta"><span>{system.coverageOk || 0} ok</span><span>{system.missingSnippet || 0} missing</span><span>{system.totalDsComponents || 0} DS components</span><ReadinessPill value={system.dsReadiness || "low"} /><ArrowUpRight size={16} /></div>
               </button>
-            )) : <div className="empty-state"><strong>Nenhum projeto ativo agora</strong><p>Quando uma página com o snippet estiver aberta e enviando heartbeat recente, ela aparecerá aqui.</p></div>}
+            )) : <div className="empty-state"><strong>Nenhum projeto monitorado</strong><p>Rode uma checagem ativa ou instale o snippet para iniciar a leitura de cobertura.</p></div>}
           </div>
         </article>
 

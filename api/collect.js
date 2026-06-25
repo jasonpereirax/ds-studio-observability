@@ -253,6 +253,8 @@ export default async function handler(req, res) {
         load_time_ms: int(body.loadTimeMs),
         dom_ready_time_ms: int(body.domReadyTimeMs),
         navigation_type: str(body.navigationType),
+        last_signal_source: "runtime",
+        snippet_detected: true,
         last_event_id: pageEventId,
         last_seen_at: body.timestamp || now
       })
@@ -297,6 +299,7 @@ export default async function handler(req, res) {
       component_variant: row.component_variant,
       component_token: row.component_token,
       count: row.count,
+      last_signal_source: "runtime",
       last_seen_at: body.timestamp || now
     }));
 
